@@ -26,6 +26,14 @@ public partial class PlayerInputController : Node
     public event Action<bool> OnLeftMouseButton;
     public bool IsEnabled { get; private set; } = true;
 
+    // Touch-to-mouse suppression: when the platform already emulates mouse events for touch,
+    // we avoid double-delivering events by suppressing mouse events that immediately follow
+    // a real touch event at (approximately) the same position.
+    private ulong lastTouchEventTimeMs = 0;
+    private Vector2 lastTouchEventPos = Vector2.Zero;
+    private const ulong TOUCH_SUPPRESS_MS = 150; // ms
+    private const float TOUCH_SUPPRESS_DISTANCE = 20f; // pixels
+
     public override void _Input(InputEvent @event)
     {
         if (!IsEnabled)
@@ -40,6 +48,8 @@ public partial class PlayerInputController : Node
         {
             case InputEventMouseMotion:
             case InputEventMouseButton { ButtonIndex: MouseButton.Left }:
+            case InputEventScreenDrag:
+            case InputEventScreenTouch:
                 handleMouseInput(@event);
                 break;
             case InputEventKey { PhysicalKeycode: Key.Escape }:
@@ -56,15 +66,50 @@ public partial class PlayerInputController : Node
 
     private void handleMouseInput(InputEvent @event)
     {
+        // Mouse motion
         if (@event is InputEventMouseMotion motion)
-            OnMouseMove?.Invoke(motion.Relative, motion.Position);
+        {
+            // If a recent touch event happened at roughly the same position, suppress the emulated mouse.
+            if (Time.GetTicksMsec() - lastTouchEventTimeMs < TOUCH_SUPPRESS_MS && lastTouchEventPos.DistanceTo(motion.Position) < TOUCH_SUPPRESS_DISTANCE)
+                return;
 
+            OnMouseMove?.Invoke(motion.Relative, motion.Position);
+        }
+
+        // Screen drag (touch move)
+        if (@event is InputEventScreenDrag drag)
+        {
+            lastTouchEventTimeMs = Time.GetTicksMsec();
+            lastTouchEventPos = drag.Position;
+
+            // InputEventScreenDrag provides Relative and Position similar to mouse motion
+            OnMouseMove?.Invoke(drag.Relative, drag.Position);
+        }
+
+        // Mouse button
         if (@event is InputEventMouseButton mouseButton)
         {
             if (!mouseButton.Pressed || mouseButton.DoubleClick)
                 return;
 
+            // Suppress mouse button if an immediate touch was just seen at the same place
+            if (Time.GetTicksMsec() - lastTouchEventTimeMs < TOUCH_SUPPRESS_MS && lastTouchEventPos.DistanceTo(mouseButton.Position) < TOUCH_SUPPRESS_DISTANCE)
+                return;
+
             OnLeftMouseButton?.Invoke(mouseButton.Pressed);
+        }
+
+        // Screen touch (finger down/up)
+        if (@event is InputEventScreenTouch touch)
+        {
+            // Only treat presses (consistent with current mouse handling which only acts on press)
+            if (!touch.Pressed)
+                return;
+
+            lastTouchEventTimeMs = Time.GetTicksMsec();
+            lastTouchEventPos = touch.Position;
+
+            OnLeftMouseButton?.Invoke(true);
         }
     }
 
