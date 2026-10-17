@@ -395,6 +395,44 @@ function bindInput() {
         if (sm.scene instanceof GameScene) sm.scene.onMouseMove(e);
     });
 
+    // Touch handling: convert finger movement into movementX/movementY and forward to GameScene.onMouseMove.
+    // Use non-passive listeners and disable default touch actions so we can prevent scrolling.
+    try {
+        const canvas = app.backend?.canvas;
+        if (canvas) {
+            canvas.style.touchAction = 'none';
+            let lastTouch = null;
+            canvas.addEventListener(
+                'touchstart',
+                (ev) => {
+                    const t = ev.touches[0];
+                    if (!t) return;
+                    lastTouch = { x: t.clientX, y: t.clientY };
+                    ev.preventDefault();
+                },
+                { passive: false },
+            );
+            canvas.addEventListener(
+                'touchmove',
+                (ev) => {
+                    const t = ev.touches[0];
+                    if (!t) return;
+                    const dx = t.clientX - (lastTouch?.x ?? t.clientX);
+                    const dy = t.clientY - (lastTouch?.y ?? t.clientY);
+                    lastTouch = { x: t.clientX, y: t.clientY };
+                    // Create a synthetic event shape expected by onMouseMove
+                    const se = { movementX: dx, movementY: dy, clientX: t.clientX, clientY: t.clientY, target: canvas };
+                    if (sm.scene instanceof GameScene) sm.scene.onMouseMove(se);
+                    ev.preventDefault();
+                },
+                { passive: false },
+            );
+            canvas.addEventListener('touchend', () => (lastTouch = null), { passive: false });
+        }
+    } catch (e) {
+        console.error('Touch handler setup failed', e);
+    }
+
     document.addEventListener('mousedown', (e) => {
         resumeAudio();
         maybeFullscreen(e);
