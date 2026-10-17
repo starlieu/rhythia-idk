@@ -421,7 +421,7 @@ function bindInput() {
                     const dy = t.clientY - (lastTouch?.y ?? t.clientY);
                     lastTouch = { x: t.clientX, y: t.clientY };
                     // Create a synthetic event shape expected by onMouseMove
-                    const se = { movementX: dx, movementY: dy, clientX: t.clientX, clientY: t.clientY, target: canvas };
+                    const se = { movementX: dx, movementY: dy, clientX: t.clientX, clientY: t.clientY, target: canvas, isTouch: true };
                     if (sm.scene instanceof GameScene) sm.scene.onMouseMove(se);
                     ev.preventDefault();
                 },
