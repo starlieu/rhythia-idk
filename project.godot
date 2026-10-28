@@ -43,6 +43,10 @@ Lobby="*res://scripts/multiplayer/Lobby.cs"
 SoundManager="*res://scripts/SoundManager.cs"
 ToastNotification="*res://scripts/ui/ToastNotification.cs"
 MapParser="*res://scripts/map/MapParser.cs"
+ReplaySpeedControl="*res://scripts/ReplaySpeedControl.cs"
+MapDownloader="*res://scripts/MapDownloader.cs"
+VideoExporter="*res://scripts/VideoExporter.cs"
+MobilePauseOverlay="*res://scripts/MobilePauseOverlay.cs"
 
 [debug]
 
@@ -52,6 +56,9 @@ file_logging/enable_file_logging=true
 
 window/size/viewport_width=1280
 window/size/viewport_height=720
+window/handheld/orientation=4
+window/stretch/mode="canvas_items"
+window/stretch/aspect="expand"
 
 [dotnet]
 
@@ -73,6 +80,7 @@ timers/tooltip_delay_sec=0.1
 
 [input_devices]
 
+pointing/emulate_touch_from_mouse=true
 pointing/android/enable_long_press_as_right_click=true
 
 [internationalization]
@@ -85,6 +93,8 @@ common/physics_ticks_per_second=120
 
 [rendering]
 
+renderer/rendering_method="mobile"
+renderer/rendering_method.mobile="mobile"
 textures/vram_compression/import_etc2_astc=true
 textures/lossless_compression/force_png=true
 environment/defaults/default_clear_color=Color(0.0885599, 0.08855992, 0.08855987, 1)
