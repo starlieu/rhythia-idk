@@ -30,34 +30,37 @@ jobs:
 
       - name: Prepare Android SDK
         run: |
+          set -euo pipefail
           SDKMANAGER="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
           if [ ! -x "$SDKMANAGER" ]; then
-            echo "sdkmanager not found, installing cmdline-tools..."
             mkdir -p "$ANDROID_SDK_ROOT/cmdline-tools"
-            wget -q https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip -O /tmp/clt.zip
+            curl -fsSL https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip -o /tmp/clt.zip
             unzip -q /tmp/clt.zip -d /tmp/clt
-            mv /tmp/clt/cmdline-tools "$ANDROID_SDK_ROOT/cmdline-tools/latest"
+            mkdir -p "$ANDROID_SDK_ROOT/cmdline-tools/latest"
+            mv /tmp/clt/cmdline-tools/* "$ANDROID_SDK_ROOT/cmdline-tools/latest/"
           fi
-          yes | "$SDKMANAGER" --licenses > /dev/null || true
-          "$SDKMANAGER" "platform-tools" "build-tools;34.0.0" "platforms;android-34"
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" "platform-tools" "platforms;android-34" "build-tools;34.0.0" "cmdline-tools;latest"
           echo "--- installed packages ---"
-          ls "$ANDROID_SDK_ROOT/build-tools" "$ANDROID_SDK_ROOT/platforms"
+          "$SDKMANAGER" --list_installed
 
-      # The project uses C#, so the .NET (mono) editor build is required.
       - name: Download Godot (mono)
         run: |
-          wget -q https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_mono_linux_x86_64.zip
-          unzip -q Godot_v${GODOT_VERSION}-stable_mono_linux_x86_64.zip
-          sudo mv Godot_v${GODOT_VERSION}-stable_mono_linux_x86_64 /usr/local/share/godot-mono
-          sudo ln -sf /usr/local/share/godot-mono/Godot_v${GODOT_VERSION}-stable_mono_linux.x86_64 /usr/local/bin/godot
+          set -euo pipefail
+          curl -fsSL "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_mono_linux_x86_64.zip" -o /tmp/godot.zip
+          unzip -q /tmp/godot.zip -d /tmp/godot
+          sudo mv /tmp/godot/Godot_v${GODOT_VERSION}-stable_mono_linux.x86_64 /usr/local/bin/godot
+          sudo chmod +x /usr/local/bin/godot
+          godot --version
 
       - name: Download Godot export templates (mono)
         run: |
-          wget -q https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_mono_export_templates.tpz
-          # Mono templates live under export_templates/<version>.stable.mono/
-          TEMPLATE_DIR=~/.local/share/godot/export_templates/${GODOT_VERSION}.stable.mono
+          set -euo pipefail
+          curl -fsSL "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_mono_export_templates.tpz" -o /tmp/templates.tpz
+          mkdir -p /tmp/templates
+          unzip -q /tmp/templates.tpz -d /tmp/templates
+          TEMPLATE_DIR="$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable.mono"
           mkdir -p "$TEMPLATE_DIR"
-          unzip -q Godot_v${GODOT_VERSION}-stable_mono_export_templates.tpz -d /tmp/templates
           mv /tmp/templates/templates/* "$TEMPLATE_DIR/"
           echo "--- templates ---"
           ls "$TEMPLATE_DIR"
@@ -70,20 +73,19 @@ jobs:
 
       - name: Create debug keystore and editor settings
         run: |
-          keytool -genkeypair -v -keystore debug.keystore \
-            -alias androiddebugkey -keyalg RSA -keysize 2048 -validity 10000 \
+          set -euo pipefail
+          keytool -genkeypair -v -keystore ~/.android/debug.keystore -alias androiddebugkey \
+            -keyalg RSA -keysize 2048 -validity 10000 \
             -storepass android -keypass android \
             -dname "CN=Android Debug,O=Android,C=US"
-          # Editor settings use a [resource] section with export/android/* keys.
-          # Written with printf so no leading indentation corrupts the file.
           mkdir -p ~/.config/godot
           printf '%s\n' \
             '[gd_resource type="EditorSettings" format=3]' \
             '' \
             '[resource]' \
-            'export/android/java_sdk_path = "'"$JAVA_HOME"'"' \
-            'export/android/android_sdk_path = "'"$ANDROID_SDK_ROOT"'"' \
-            'export/android/debug_keystore = "'"$GITHUB_WORKSPACE"'/debug.keystore"' \
+            'export/android/android_sdk_path = "/usr/local/lib/android/sdk"' \
+            'export/android/java_sdk_path = "/usr/lib/jvm/temurin-17-jdk-amd64"' \
+            'export/android/debug_keystore = "/home/runner/.android/debug.keystore"' \
             'export/android/debug_keystore_user = "androiddebugkey"' \
             'export/android/debug_keystore_pass = "android"' \
             > ~/.config/godot/editor_settings-4.7.tres
@@ -101,7 +103,15 @@ jobs:
         run: |
           set -o pipefail
           mkdir -p builds/android
+          set +e
           godot --headless --export-debug --verbose "Android" builds/android/Rhythia.apk 2>&1 | tee godot-export.log
+          code=${PIPESTATUS[0]}
+          set -e
+          if [ "$code" -ne 0 ]; then
+            grep -n -i -E "error|failed|exception" godot-export.log | head -50 || true
+            tail -n 80 godot-export.log
+            exit "$code"
+          fi
 
       - name: Upload Godot logs
         if: always()
