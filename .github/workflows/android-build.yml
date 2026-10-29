@@ -9,6 +9,7 @@ on:
 
 env:
   GODOT_VERSION: "4.7.1"
+  ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
 
 jobs:
   build-apk:
@@ -27,8 +28,15 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
+      # NOTE: we do NOT use android-actions/setup-android here.
+      # The Android SDK is already preinstalled on GitHub ubuntu runners
+      # at /usr/local/lib/android/sdk. We only ensure the required
+      # packages are present and licenses are accepted.
+      - name: Prepare Android SDK (preinstalled)
+        run: |
+          sdkmanager --version
+          yes | sdkmanager --licenses > /dev/null || true
+          sdkmanager "platform-tools" "build-tools;34.0.0" "platforms;android-34"
 
       - name: Download Godot
         run: |
@@ -55,16 +63,18 @@ jobs:
             -alias androiddebugkey -keyalg RSA -keysize 2048 -validity 10000 \
             -storepass android -keypass android \
             -dname "CN=Android Debug,O=Android,C=US"
+          # Godot 4 uses a .tres editor settings file (not XML).
           mkdir -p ~/.config/godot
-          cat > ~/.config/godot/editor_settings-4.7.xml <<EOF
-          <?xml version="1.0" encoding="UTF-8"?>
-          <editor_settings>
-            <setting name="export/android/java_sdk_path" value="$JAVA_HOME"></setting>
-            <setting name="export/android/android_sdk_path" value="$ANDROID_HOME"></setting>
-            <setting name="export/android/debug_keystore_file" value="$GITHUB_WORKSPACE/debug.keystore"></setting>
-            <setting name="export/android/debug_keystore_user" value="androiddebugkey"></setting>
-            <setting name="export/android/debug_keystore_pass" value="android"></setting>
-          </editor_settings>
+          cat > ~/.config/godot/editor_settings-4.tres <<EOF
+          config_version=5
+
+          [export]
+
+          android/java_sdk_path="$JAVA_HOME"
+          android/android_sdk_path="$ANDROID_SDK_ROOT"
+          android/debug_keystore_file="$GITHUB_WORKSPACE/debug.keystore"
+          android/debug_keystore_user="androiddebugkey"
+          android/debug_keystore_pass="android"
           EOF
 
       - name: Export Android APK
