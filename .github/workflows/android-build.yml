@@ -88,19 +88,28 @@ jobs:
       # Import the project first — a headless export fails with exit code 1
       # if the .godot import cache doesn't exist yet.
       - name: Import project
-        run: godot --headless --import --verbose || true
+        run: |
+          set -o pipefail
+          godot --headless --import --verbose 2>&1 | tee godot-import.log
+          echo "--- .godot cache ---"
+          ls -la .godot || echo "WARNING: .godot cache missing after import!"
 
       - name: Export Android APK
-        run: godot --headless --export-debug --verbose "Android" builds/android/Rhythia.apk
+        run: |
+          set -o pipefail
+          mkdir -p builds/android
+          godot --headless --export-debug --verbose "Android" builds/android/Rhythia.apk 2>&1 | tee godot-export.log
 
-      - name: Upload export log on failure
-        if: failure()
+      # Always capture Godot's full stdout/stderr so failures are debuggable.
+      - name: Upload Godot logs
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: export-log
+          name: godot-logs
           path: |
-            logs/
-            builds/
+            godot-import.log
+            godot-export.log
+          if-no-files-found: warn
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
