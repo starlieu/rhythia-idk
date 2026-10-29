@@ -633,7 +633,15 @@ public partial class MapList : Panel, ISkinnable
 
     private void shuffle()
     {
-        Maps = [.. Maps.Shuffle()];
+        // Fisher-Yates shuffle (List<T>.Shuffle() does not exist in the BCL)
+        var shuffled = new List<Map>(Maps);
+        var rng = new Random();
+        for (int i = shuffled.Count - 1; i > 0; i--)
+        {
+            int j = rng.Next(i + 1);
+            (shuffled[i], shuffled[j]) = (shuffled[j], shuffled[i]);
+        }
+        Maps = shuffled;
 
         clear();
     }
