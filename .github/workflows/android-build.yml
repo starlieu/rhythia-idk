@@ -28,9 +28,6 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      # Do NOT rely on `sdkmanager` being on PATH (it often is not, and the
-      # preinstalled SDK layout varies between runner images). Resolve it
-      # explicitly under ANDROID_SDK_ROOT, installing cmdline-tools if missing.
       - name: Prepare Android SDK
         run: |
           SDKMANAGER="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
@@ -46,21 +43,24 @@ jobs:
           echo "--- installed packages ---"
           ls "$ANDROID_SDK_ROOT/build-tools" "$ANDROID_SDK_ROOT/platforms"
 
-      - name: Download Godot
+      # The project uses C#, so the .NET (mono) editor build is required.
+      - name: Download Godot (mono)
         run: |
-          wget -q https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip
-          unzip -q Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip
-          sudo mv Godot_v${GODOT_VERSION}-stable_linux.x86_64 /usr/local/bin/godot
+          wget -q https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_mono_linux_x86_64.zip
+          unzip -q Godot_v${GODOT_VERSION}-stable_mono_linux_x86_64.zip
+          sudo mv Godot_v${GODOT_VERSION}-stable_mono_linux_x86_64 /usr/local/share/godot-mono
+          sudo ln -sf /usr/local/share/godot-mono/Godot_v${GODOT_VERSION}-stable_mono_linux.x86_64 /usr/local/bin/godot
 
-      - name: Download Godot export templates
+      - name: Download Godot export templates (mono)
         run: |
-          wget -q https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_export_templates.tpz
-          # Godot expects templates under export_templates/<version>.stable/
-          mkdir -p ~/.local/share/godot/export_templates/${GODOT_VERSION}.stable
-          unzip -q Godot_v${GODOT_VERSION}-stable_export_templates.tpz -d /tmp/templates
-          mv /tmp/templates/templates/* ~/.local/share/godot/export_templates/${GODOT_VERSION}.stable/
+          wget -q https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_mono_export_templates.tpz
+          # Mono templates live under export_templates/<version>.stable.mono/
+          TEMPLATE_DIR=~/.local/share/godot/export_templates/${GODOT_VERSION}.stable.mono
+          mkdir -p "$TEMPLATE_DIR"
+          unzip -q Godot_v${GODOT_VERSION}-stable_mono_export_templates.tpz -d /tmp/templates
+          mv /tmp/templates/templates/* "$TEMPLATE_DIR/"
           echo "--- templates ---"
-          ls ~/.local/share/godot/export_templates/${GODOT_VERSION}.stable/
+          ls "$TEMPLATE_DIR"
 
       - name: Restore dependencies
         run: dotnet restore --locked-mode
@@ -74,25 +74,22 @@ jobs:
             -alias androiddebugkey -keyalg RSA -keysize 2048 -validity 10000 \
             -storepass android -keypass android \
             -dname "CN=Android Debug,O=Android,C=US"
-          # Godot loads editor settings from editor_settings-<major>.<minor>.tres
-          # (the log showed it looking for editor_settings-4.7.tres).
+          # Editor settings use a [resource] section with export/android/* keys.
+          # Written with printf so no leading indentation corrupts the file.
           mkdir -p ~/.config/godot
-          cat > ~/.config/godot/editor_settings-4.7.tres <<EOF
-          config_version=5
+          printf '%s\n' \
+            '[gd_resource type="EditorSettings" format=3]' \
+            '' \
+            '[resource]' \
+            'export/android/java_sdk_path = "'"$JAVA_HOME"'"' \
+            'export/android/android_sdk_path = "'"$ANDROID_SDK_ROOT"'"' \
+            'export/android/debug_keystore = "'"$GITHUB_WORKSPACE"'/debug.keystore"' \
+            'export/android/debug_keystore_user = "androiddebugkey"' \
+            'export/android/debug_keystore_pass = "android"' \
+            > ~/.config/godot/editor_settings-4.7.tres
+          echo "--- editor settings ---"
+          cat ~/.config/godot/editor_settings-4.7.tres
 
-          [export]
-
-          android/java_sdk_path="$JAVA_HOME"
-          android/android_sdk_path="$ANDROID_SDK_ROOT"
-          android/debug_keystore_file="$GITHUB_WORKSPACE/debug.keystore"
-          android/debug_keystore_user="androiddebugkey"
-          android/debug_keystore_pass="android"
-          EOF
-
-      # Import the project first — a headless export fails with exit code 1
-      # if the .godot import cache doesn't exist yet. The C# autoload
-      # "No loader found" errors during import are expected: the assembly
-      # is already built, they are harmless for the export itself.
       - name: Import project
         run: |
           set -o pipefail
@@ -106,7 +103,6 @@ jobs:
           mkdir -p builds/android
           godot --headless --export-debug --verbose "Android" builds/android/Rhythia.apk 2>&1 | tee godot-export.log
 
-      # Always capture Godot's full stdout/stderr so failures are debuggable.
       - name: Upload Godot logs
         if: always()
         uses: actions/upload-artifact@v4
