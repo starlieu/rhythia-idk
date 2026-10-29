@@ -20,7 +20,9 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: 10.0.x
+          dotnet-version: |
+            9.0.x
+            10.0.x
 
       - name: Setup Java
         uses: actions/setup-java@v5
@@ -41,7 +43,6 @@ jobs:
           fi
           yes | "$SDKMANAGER" --licenses >/dev/null || true
           "$SDKMANAGER" "platform-tools" "platforms;android-34" "build-tools;34.0.0" "cmdline-tools;latest"
-          echo "--- installed packages ---"
           "$SDKMANAGER" --list_installed
 
       - name: Download Godot (mono)
@@ -52,7 +53,6 @@ jobs:
           GODOT_BIN=$(find /tmp/godot -type f -name 'Godot_v*mono_linux.x86_64' | head -n 1)
           test -n "$GODOT_BIN"
           sudo mv "$GODOT_BIN" /usr/local/bin/godot
-          # the mono build needs its GodotSharp folder next to the binary
           sudo cp -r "$(dirname "$GODOT_BIN")/GodotSharp" /usr/local/bin/GodotSharp
           sudo chmod +x /usr/local/bin/godot
           godot --version
@@ -66,7 +66,6 @@ jobs:
           TEMPLATE_DIR="$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable.mono"
           mkdir -p "$TEMPLATE_DIR"
           mv /tmp/templates/templates/* "$TEMPLATE_DIR/"
-          echo "--- templates ---"
           ls "$TEMPLATE_DIR"
 
       - name: Restore dependencies
@@ -89,34 +88,22 @@ jobs:
             '' \
             '[resource]' \
             'export/android/android_sdk_path = "/usr/local/lib/android/sdk"' \
-            'export/android/java_sdk_path = "/usr/lib/jvm/temurin-17-jdk-amd64"' \
+            'export/android/java_sdk_path = "/opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.*/x64"' \
             'export/android/debug_keystore = "/home/runner/.android/debug.keystore"' \
             'export/android/debug_keystore_user = "androiddebugkey"' \
             'export/android/debug_keystore_pass = "android"' \
             > ~/.config/godot/editor_settings-4.7.tres
-          echo "--- editor settings ---"
-          cat ~/.config/godot/editor_settings-4.7.tres
 
       - name: Import project
         run: |
           set -o pipefail
-          godot --headless --import --verbose 2>&1 | tee godot-import.log || true
-          echo "--- .godot cache ---"
-          ls -la .godot || echo "WARNING: .godot cache missing after import!"
+          godot --headless --import --verbose 2>&1 | tee godot-import.log
 
       - name: Export Android APK
         run: |
           set -o pipefail
           mkdir -p builds/android
-          set +e
           godot --headless --export-debug --verbose "Android" builds/android/Rhythia.apk 2>&1 | tee godot-export.log
-          code=${PIPESTATUS[0]}
-          set -e
-          if [ "$code" -ne 0 ]; then
-            grep -n -i -E "error|failed|exception" godot-export.log | head -50 || true
-            tail -n 80 godot-export.log
-            exit "$code"
-          fi
 
       - name: Upload Godot logs
         if: always()
