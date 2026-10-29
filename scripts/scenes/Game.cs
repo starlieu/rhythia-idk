@@ -28,12 +28,30 @@ public partial class Game : BaseScene
     public static Attempt Attempt;
     public static bool StartQueued = false;
     private static double fadeoutToggleValue = -1;
+    private Button touchPauseButton;
 
     public override void _Ready()
     {
         base._Ready();
 
         Instance = this;
+
+        if (OS.HasFeature("android") || OS.HasFeature("ios") || DisplayServer.IsTouchscreenAvailable())
+        {
+            var touchPauseLayer = new CanvasLayer { Layer = 100 };
+            touchPauseButton = new Button
+            {
+                Text = "II",
+                Position = new Vector2(16, 16),
+                Size = new Vector2(96, 96),
+                CustomMinimumSize = new Vector2(96, 96),
+                FocusMode = Control.FocusModeEnum.None,
+                Visible = false,
+            };
+            touchPauseButton.Pressed += TogglePauseMenu;
+            touchPauseLayer.AddChild(touchPauseButton);
+            AddChild(touchPauseLayer);
+        }
 
         ReplayManager ??= GetNode<ReplayManager>("ReplayManager");
         CursorManager ??= GetNode<CursorManager>("CursorManager");
@@ -67,24 +85,7 @@ public partial class Game : BaseScene
 
         PlayerInputController.OnLeftMouseButton += isPressed => { };
 
-        PlayerInputController.OnTogglePaused += () =>
-        {
-            if (Runner.ObjectIndicesStart[typeof(Note)] > 0 && Attempt.Progress < Attempt.Map.Notes[^1].Millisecond)
-            {
-                Attempt.Qualifies = false;
-            }
-
-            if (SettingsManager.Shown)
-            {
-                SettingsMenu.Instance.HideMenu();
-            }
-            else
-            {
-                if (Rhythia.TempMode && !PlaytestOverlay.PlaytestInit)
-                    return;
-                Menu.ShowMenu(!Menu.Shown);
-            }
-        };
+        PlayerInputController.OnTogglePaused += TogglePauseMenu;
 
         PlayerInputController.OnToggleReplayViewerVisibility += () =>
         {
@@ -149,6 +150,34 @@ public partial class Game : BaseScene
 
         PlayerInputController.OnTogglePushback += () => Attempt.Settings.Pushback.Value = !Attempt.Settings.Pushback;
         PlayerInputController.OnRestartPressed += Restart;
+    }
+
+    public override void _Process(double delta)
+    {
+        if (touchPauseButton != null)
+        {
+            touchPauseButton.Visible =
+                Runner.Playing && !Menu.Shown && !SettingsManager.Shown && !Attempt.Stopped;
+        }
+    }
+
+    private void TogglePauseMenu()
+    {
+        if (Runner.ObjectIndicesStart[typeof(Note)] > 0 && Attempt.Progress < Attempt.Map.Notes[^1].Millisecond)
+        {
+            Attempt.Qualifies = false;
+        }
+
+        if (SettingsManager.Shown)
+        {
+            SettingsMenu.Instance.HideMenu();
+        }
+        else
+        {
+            if (Rhythia.TempMode && !PlaytestOverlay.PlaytestInit)
+                return;
+            Menu.ShowMenu(!Menu.Shown);
+        }
     }
 
     public override void Load()
