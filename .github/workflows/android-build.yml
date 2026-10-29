@@ -85,8 +85,22 @@ jobs:
           android/debug_keystore_pass="android"
           EOF
 
+      # Import the project first — a headless export fails with exit code 1
+      # if the .godot import cache doesn't exist yet.
+      - name: Import project
+        run: godot --headless --import --verbose || true
+
       - name: Export Android APK
-        run: godot --headless --export-debug "Android" builds/android/Rhythia.apk
+        run: godot --headless --export-debug --verbose "Android" builds/android/Rhythia.apk
+
+      - name: Upload export log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: export-log
+          path: |
+            logs/
+            builds/
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
