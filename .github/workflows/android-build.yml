@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
 
 env:
-  GODOT_VERSION: "4.7.1"
+  GODOT_VERSION: "4.7.2"
   ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
 
 jobs:
@@ -66,13 +66,6 @@ jobs:
           TEMPLATE_DIR="$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable.mono"
           mkdir -p "$TEMPLATE_DIR"
           mv /tmp/templates/templates/* "$TEMPLATE_DIR/"
-          ls "$TEMPLATE_DIR"
-
-      - name: Restore dependencies
-        run: dotnet restore --locked-mode
-
-      - name: Build C# assembly
-        run: dotnet build Rhythia.csproj -c Release
 
       - name: Create debug keystore and editor settings
         run: |
@@ -88,16 +81,23 @@ jobs:
             '' \
             '[resource]' \
             'export/android/android_sdk_path = "/usr/local/lib/android/sdk"' \
-            'export/android/java_sdk_path = "/opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.*/x64"' \
+            "export/android/java_sdk_path = \"$JAVA_HOME\"" \
             'export/android/debug_keystore = "/home/runner/.android/debug.keystore"' \
             'export/android/debug_keystore_user = "androiddebugkey"' \
             'export/android/debug_keystore_pass = "android"' \
             > ~/.config/godot/editor_settings-4.7.tres
 
+      - name: Install Android Gradle build template
+        run: godot --headless --install-android-build-template
+
+      - name: Restore Android C# dependencies
+        run: dotnet restore Rhythia.csproj -p:GodotTargetPlatform=android
+
+      - name: Build Android C# assembly
+        run: dotnet build Rhythia.csproj -c Release --no-restore -p:GodotTargetPlatform=android
+
       - name: Import project
-        run: |
-          set -o pipefail
-          godot --headless --import --verbose 2>&1 | tee godot-import.log
+        run: godot --headless --import --verbose 2>&1 | tee godot-import.log
 
       - name: Export Android APK
         run: |
