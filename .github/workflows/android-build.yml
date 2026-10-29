@@ -78,6 +78,7 @@ jobs:
       - name: Create debug keystore and editor settings
         run: |
           set -euo pipefail
+          mkdir -p ~/.android
           keytool -genkeypair -v -keystore ~/.android/debug.keystore -alias androiddebugkey \
             -keyalg RSA -keysize 2048 -validity 10000 \
             -storepass android -keypass android \
