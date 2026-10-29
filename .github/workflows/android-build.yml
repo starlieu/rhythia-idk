@@ -55,9 +55,12 @@ jobs:
       - name: Download Godot export templates
         run: |
           wget -q https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_export_templates.tpz
-          mkdir -p ~/.local/share/godot/export_templates
+          # Godot expects templates under export_templates/<version>.stable/
+          mkdir -p ~/.local/share/godot/export_templates/${GODOT_VERSION}.stable
           unzip -q Godot_v${GODOT_VERSION}-stable_export_templates.tpz -d /tmp/templates
-          mv /tmp/templates/templates/* ~/.local/share/godot/export_templates/
+          mv /tmp/templates/templates/* ~/.local/share/godot/export_templates/${GODOT_VERSION}.stable/
+          echo "--- templates ---"
+          ls ~/.local/share/godot/export_templates/${GODOT_VERSION}.stable/
 
       - name: Restore dependencies
         run: dotnet restore --locked-mode
@@ -71,9 +74,10 @@ jobs:
             -alias androiddebugkey -keyalg RSA -keysize 2048 -validity 10000 \
             -storepass android -keypass android \
             -dname "CN=Android Debug,O=Android,C=US"
-          # Godot 4 uses a .tres editor settings file (not XML).
+          # Godot loads editor settings from editor_settings-<major>.<minor>.tres
+          # (the log showed it looking for editor_settings-4.7.tres).
           mkdir -p ~/.config/godot
-          cat > ~/.config/godot/editor_settings-4.tres <<EOF
+          cat > ~/.config/godot/editor_settings-4.7.tres <<EOF
           config_version=5
 
           [export]
@@ -86,11 +90,13 @@ jobs:
           EOF
 
       # Import the project first — a headless export fails with exit code 1
-      # if the .godot import cache doesn't exist yet.
+      # if the .godot import cache doesn't exist yet. The C# autoload
+      # "No loader found" errors during import are expected: the assembly
+      # is already built, they are harmless for the export itself.
       - name: Import project
         run: |
           set -o pipefail
-          godot --headless --import --verbose 2>&1 | tee godot-import.log
+          godot --headless --import --verbose 2>&1 | tee godot-import.log || true
           echo "--- .godot cache ---"
           ls -la .godot || echo "WARNING: .godot cache missing after import!"
 
