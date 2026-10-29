@@ -35,7 +35,7 @@ public partial class MapDownloader : Node
         AddChild(http);
         http.RequestCompleted += (result, code, _headers, body) =>
         {
-            if (result != HttpRequest.ResultCode.Success || code != 200)
+            if (result != (long)HttpRequest.Result.Success || code != 200)
             {
                 onError?.Invoke($"HTTP error {code}");
                 http.QueueFree();
@@ -85,7 +85,7 @@ public partial class MapDownloader : Node
 
         http.RequestCompleted += (result, code, _headers, body) =>
         {
-            if (result != HttpRequest.ResultCode.Success || code != 200)
+            if (result != (long)HttpRequest.Result.Success || code != 200)
             {
                 DownloadFailed?.Invoke($"Failed to download map {id}: HTTP {code}");
                 http.QueueFree();
