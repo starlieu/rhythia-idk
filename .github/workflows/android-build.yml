@@ -23,20 +23,28 @@ jobs:
           dotnet-version: 10.0.x
 
       - name: Setup Java
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: "17"
 
-      # NOTE: we do NOT use android-actions/setup-android here.
-      # The Android SDK is already preinstalled on GitHub ubuntu runners
-      # at /usr/local/lib/android/sdk. We only ensure the required
-      # packages are present and licenses are accepted.
-      - name: Prepare Android SDK (preinstalled)
+      # Do NOT rely on `sdkmanager` being on PATH (it often is not, and the
+      # preinstalled SDK layout varies between runner images). Resolve it
+      # explicitly under ANDROID_SDK_ROOT, installing cmdline-tools if missing.
+      - name: Prepare Android SDK
         run: |
-          sdkmanager --version
-          yes | sdkmanager --licenses > /dev/null || true
-          sdkmanager "platform-tools" "build-tools;34.0.0" "platforms;android-34"
+          SDKMANAGER="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
+          if [ ! -x "$SDKMANAGER" ]; then
+            echo "sdkmanager not found, installing cmdline-tools..."
+            mkdir -p "$ANDROID_SDK_ROOT/cmdline-tools"
+            wget -q https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip -O /tmp/clt.zip
+            unzip -q /tmp/clt.zip -d /tmp/clt
+            mv /tmp/clt/cmdline-tools "$ANDROID_SDK_ROOT/cmdline-tools/latest"
+          fi
+          yes | "$SDKMANAGER" --licenses > /dev/null || true
+          "$SDKMANAGER" "platform-tools" "build-tools;34.0.0" "platforms;android-34"
+          echo "--- installed packages ---"
+          ls "$ANDROID_SDK_ROOT/build-tools" "$ANDROID_SDK_ROOT/platforms"
 
       - name: Download Godot
         run: |
