@@ -87,9 +87,6 @@ jobs:
             'export/android/debug_keystore_pass = "android"' \
             > ~/.config/godot/editor_settings-4.7.tres
 
-      - name: Install Android Gradle build template
-        run: godot --headless --install-android-build-template
-
       - name: Restore Android C# dependencies
         run: dotnet restore Rhythia.csproj -p:GodotTargetPlatform=android
 
